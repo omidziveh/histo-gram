@@ -1,0 +1,6 @@
+.env
+venv/
+__pycache__/
+notebooks/
+id.txt
+log_id.txt
