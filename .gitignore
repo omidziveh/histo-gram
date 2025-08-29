@@ -4,3 +4,4 @@ __pycache__/
 notebooks/
 id.txt
 log_id.txt
+subscribers.db
