@@ -6,6 +6,9 @@ import asyncio
 from pathlib import Path
 from dotenv import load_dotenv
 
+# --- Configuration ---
+VERSION = "Beta 1.0"
+
 # ----------------- FUNCTIONS ----------------- 
 
 def get_object_content(id):
