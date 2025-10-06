@@ -1,5 +1,6 @@
 # Logs
 
+*.log
 logs
 _.log
 npm-debug.log_
@@ -165,3 +166,6 @@ dist
 .env*
 !.env.example
 .wrangler/
+
+.DS_Store
+Thumbs.db

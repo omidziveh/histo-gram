@@ -1,26 +1,34 @@
-/**
- * Welcome to Cloudflare Workers! This is your first worker.
- *
- * - Run `npm run dev` in your terminal to start a development server
- * - Open a browser tab at http://localhost:8787/ to see your worker in action
- * - Run `npm run deploy` to publish your worker
- *
- * Bind resources to your worker in `wrangler.jsonc`. After adding bindings, a type definition for the
- * `Env` object can be regenerated with `npm run cf-typegen`.
- *
- * Learn more at https://developers.cloudflare.com/workers/
- */
+import { handleWebhook } from './handlers/webhook';
+import { handleScheduled } from './handlers/scheduled';
+import { Logger } from './utils/logger';
+import type { Env } from './types';
+
+const log = new Logger('Index');
 
 export default {
-	async fetch(request, env, ctx): Promise<Response> {
-		const url = new URL(request.url);
-		switch (url.pathname) {
-			case '/message':
-				return new Response('Hello, World!');
-			case '/random':
-				return new Response(crypto.randomUUID());
-			default:
-				return new Response('Not Found', { status: 404 });
-		}
-	},
-} satisfies ExportedHandler<Env>;
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    try {
+      const url = new URL(request.url);
+
+      if (url.pathname === '/scheduled') {
+        log.info('Received scheduled trigger.');
+        await handleScheduled(env);
+        return new Response('Scheduled task executed.');
+      }
+
+      if (request.method === 'POST') {
+        log.info('Received webhook POST request.');
+        await handleWebhook(request, env, ctx);
+        return new Response('OK');
+      }
+
+      return new Response('Not Found', { status: 404 });
+
+    } catch (error) {
+      log.error('A critical, unhandled error occurred at the top level:', error);
+      
+      return new Response('Internal Server Error', { status: 500 });
+    } finally {
+    }
+  },
+};

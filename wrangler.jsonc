@@ -10,13 +10,28 @@
 	"compatibility_flags": [
 		"global_fetch_strictly_public"
 	],
-	"assets": {
-		// The path to the directory containing the `index.html` file to be served at `/`
-		"directory": "./public"
-	},
 	"observability": {
 		"enabled": true
-	}
+	},
+	"triggers": {
+		"crons": [
+			"0 5 * * *"
+		]
+	},
+	"kv_namespaces": [
+		{
+			"binding": "RATE_LIMIT_KV",
+			"id": "78620ccbb6d7448b9676ad65dfc36eef",
+			"preview_id": "deae4267df9c4dde9cb67ad9392a00e0"
+		}
+	],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "histo-gram-db",
+			"database_id": "5d662a3b-7733-4966-af73-dc436c02ebf7"
+		}
+	]
 	/**
 	 * Smart Placement
 	 * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
