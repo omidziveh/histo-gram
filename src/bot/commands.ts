@@ -1,10 +1,11 @@
 import type { Env, TelegramMessage } from '../types';
 import { sendMessage } from '../services/telegramApi';
-import { findUserById, addUser, removeUser, getAllSubscribedUsers } from '../db/queries';
+import { findUserById, addUser, removeUser, getAllSubscribedUsers, skipNextObject } from '../db/queries';
 import { Logger } from '../utils/logger';
 import { escapeMarkdown } from '../utils/caption';
 import { getNewObjectId, processAndSendToUser } from "../handlers/scheduled";
 import { isBetaTester } from '../utils/beta';
+import { clearMemory } from '../utils/memory';
 
 const log = new Logger('BotCommands');
 
@@ -98,7 +99,7 @@ export async function handleTestBroadcast(message:TelegramMessage, env:Env, ctx:
             }
             log.info('object found');
 
-            const success = await processAndSendToUser(chatId, objectId, env);
+            const success = await processAndSendToUser(chatId, objectId, true, env);
             if (success) {
                 log.info(`Test broadcast successfully sent to chatId ${chatId} (@${message.from?.username})`);
                 await sendMessage(chatId, escapeMarkdown("Test broadcast sent successfully."), env);
@@ -110,6 +111,7 @@ export async function handleTestBroadcast(message:TelegramMessage, env:Env, ctx:
             log.error('Error handling /testbroadcast command:', error);
             await sendMessage(chatId, escapeMarkdown("An error occurred while processing your request."), env);
         }
+        clearMemory();
     })());
 }
 
@@ -175,5 +177,32 @@ export async function handleUpdateUsernames(message: TelegramMessage, env: Env):
     } catch (error) {
         log.error('Error during username update process:', error);
         await sendMessage(chatId, escapeMarkdown('❌ An error occurred during the update process.'), env);
+    }
+}
+
+export async function handleSkipObject(message: TelegramMessage, env: Env) {
+    const chatId = message.chat.id;
+
+    if (!isBetaTester(chatId, env)) {
+        log.warn(`Unauthorized user ${chatId} attempted to skip object.`);
+        return;
+    }
+
+    try {
+        log.info(`Admin ${chatId} initiated skip object process.`);
+        await sendMessage(chatId, escapeMarkdown('🔄 Skipping object...'), env);
+
+        log.info(`Admin ${chatId} is skipping the next object.`);
+        
+        const skippedObjectId = await skipNextObject(env);
+
+        if (skippedObjectId) {
+            await sendMessage(chatId, escapeMarkdown(`✅ Successfully skipped object ID: ${skippedObjectId}`), env);
+        } else {
+            await sendMessage(chatId, escapeMarkdown('ℹ️ There are no objects left to skip. The queue is empty.'), env);
+        }
+    } catch (error) {
+        log.error('Error during skip object process:', error);
+        await sendMessage(chatId, escapeMarkdown('❌ An error occurred while processing your request.'), env);
     }
 }

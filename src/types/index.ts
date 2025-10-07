@@ -107,3 +107,10 @@ export interface Choice {
 export interface AIResponse {
     choices: Choice[];
 }
+
+export interface PreparedContent {
+    objectData: ObjectData,
+    objectId: string,
+    photoUrls: string[],
+    caption: string;
+}

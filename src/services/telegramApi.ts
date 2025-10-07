@@ -50,6 +50,9 @@ export async function sendMediaGroupToUser(
       throw new Error(`error while sending media group: ${errorData.description}`);
     }
 
+    await response.text();
+    log.info(`Successfully sent text to chat_id: ${chatId}`);
+
     log.info(`[SUCCESS] media group sent to ${chatId}`);
   } catch (error) {
     clearTimeout(timeoutId);

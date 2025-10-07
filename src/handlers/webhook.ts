@@ -1,5 +1,5 @@
 import type { TelegramUpdate, Env } from '../types';
-import { handleListUsers, handleStart, handleStop, handleTestBroadcast, handleUpdateUsernames } from '../bot/commands';
+import { handleListUsers, handleSkipObject, handleStart, handleStop, handleTestBroadcast, handleUpdateUsernames } from '../bot/commands';
 import { isRateLimited } from '../utils/rateLimiter';
 import { Logger } from "../utils/logger";
 import { sendMessage } from '../services/telegramApi';
@@ -43,6 +43,10 @@ export async function handleWebhook(request: Request, env: Env, ctx: ExecutionCo
             }
             case '/updateusernames': { // Add this case
                 await handleUpdateUsernames(message, env);
+                break;
+            }
+            case '/skip': {
+                await handleSkipObject(message, env);
                 break;
             }
             default:{

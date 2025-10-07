@@ -110,3 +110,39 @@ export async function getFirstUncheckedObject(env: Env): Promise<string | null> 
     throw error;
   }
 }
+
+/**
+ * Finds the first object in the pool where 'checked' is FALSE,
+ * updates it to TRUE, and returns its ID.
+ * This is used to "skip" an object without sending it.
+ * @param env - The environment object.
+ * @returns The ID of the skipped object, or null if no unchecked objects are left.
+ */
+export async function skipNextObject(env: Env): Promise<string | null> {
+    try {
+        const stmt = env.DB.prepare(`
+            UPDATE objects 
+            SET checked = TRUE 
+            WHERE object_id = (
+                SELECT object_id FROM objects 
+                WHERE checked = FALSE 
+                LIMIT 1
+            )
+            RETURNING object_id;
+        `);
+
+        const result = await stmt.first<{ object_id: string }>();
+
+        if (!result) {
+            console.log('No more unchecked objects in the pool to skip.');
+            return null;
+        }
+
+        console.log(`Skipped object ID: ${result.object_id}.`);
+        return result.object_id;
+
+    } catch (error) {
+        console.error('Error during skip object operation:', error);
+        throw error;
+    }
+}

@@ -6,8 +6,11 @@ import { generateComment, translateTtitle } from "../services/aiApi";
 import { retry } from "../utils/retry";
 import { sendMediaGroupToUser } from "../services/telegramApi";
 import { escapeMarkdown, generateDatePart } from "../utils/caption";
+import { clearMemory, getMemory, setMemory } from "../utils/memory";
 
 const log = new Logger('ScheduledHandler')
+
+
 
 /**
  * Gets a new object ID for the broadcast.
@@ -62,22 +65,32 @@ export async function getNewObjectId(env: Env, isBeta: boolean = false): Promise
     }
 }
 
-export async function processAndSendToUser(chatId:number, objectId:string, env:Env): Promise<boolean> {
+export async function processAndSendToUser(
+    chatId:number, 
+    objectId:string, 
+    initiate: boolean = false,
+    env:Env
+): Promise<boolean> {
     try {
-        const objectData: ObjectData = await fetchObjectData(objectId, env);
-        const photoUrls: string[] = [objectData.primaryImage, ...objectData.additionalImages.slice(0, 3)]
+        if (initiate) {
+            await setMemory(objectId, env);
+        }
+        const memory = await getMemory();
+        
+        const title = memory?.objectData.title || 'Untitled';
+        const photoUrls = memory?.photoUrls || [];
+        const caption = memory?.caption || '';
 
-        const aiExplanation = await generateComment(objectData, env);
-        const translated_text = await translateTtitle(objectData.title, env);
-        const date_part = escapeMarkdown(generateDatePart(objectData.objectBeginDate, objectData.objectEndDate));
-        const rawCaption = `<b><a href="${objectData.objectURL}">${translated_text}</a></b>\n${date_part}\n\n${aiExplanation}`;
-        const escapedCaption = escapeMarkdown(rawCaption);
+        if (photoUrls.length === 0) {
+            log.warn(`No photos available to send for object ID ${objectId}.`);
+            return false;
+        }
 
         while (photoUrls.length > 0) {
             try {
                 log.info(`Attempting to send ${photoUrls.length} photos to user ${chatId}`);
-                await sendMediaGroupToUser(chatId, photoUrls, escapedCaption, env);
-                log.info(`[SUCCESS] Sent to ${chatId}: ${objectData.title}`);
+                await sendMediaGroupToUser(chatId, photoUrls, caption, env);
+                log.info(`[SUCCESS] Sent to ${chatId}: ${title}`);
                 return true;
             } catch (error) {
                 if (!isError(error)) {
@@ -128,18 +141,34 @@ export async function handleScheduled(env:Env): Promise<void> {
         
         log.info(`Using object ID ${objectId} for broadcast.`);
         const failedUsers: number[] = [];
-        for (const user of users) {
-            const success = await processAndSendToUser(user.chat_id, objectId, env);
+        for (let i = 0; i < users.length; i++) {
+            const user = users[i];
+            const success = await processAndSendToUser(
+                user.chat_id, 
+                objectId, 
+                i === 0,
+                env
+            );
             if (!success) {
                 failedUsers.push(user.chat_id);
+            }
+            // To avoid hitting rate limits, wait for 1 second between sends
+            if (i < users.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
             }
         }
 
         if (failedUsers.length > 0) {
             log.error(`Failed to send to ${failedUsers.length} users.`);
             const retriedUsers: number[] = [];
-            for (const chatId of failedUsers) {
-                const success = await processAndSendToUser(chatId, objectId, env);
+            for (let i = 0; i < failedUsers.length; i++) {
+                const chatId = failedUsers[i];
+                const success = await processAndSendToUser(
+                    chatId, 
+                    objectId,
+                    false,
+                    env,
+                );
                 if (!success) {
                     retriedUsers.push(chatId);
                 }
@@ -148,6 +177,8 @@ export async function handleScheduled(env:Env): Promise<void> {
         } else {
             log.info('Successfully sent to all users.');
         }
+        clearMemory();
+        log.info('Broadcast process completed.');
         
     } catch (error) {
         log.error('A critical error occurred during the daily broadcast process:', error);
