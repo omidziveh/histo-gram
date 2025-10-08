@@ -8,13 +8,6 @@ const log = new Logger('Index');
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     try {
-      const url = new URL(request.url);
-
-      if (url.pathname === '/scheduled') {
-        log.info('Received scheduled trigger.');
-        await handleScheduled(env);
-        return new Response('Scheduled task executed.');
-      }
 
       if (request.method === 'POST') {
         log.info('Received webhook POST request.');
@@ -31,4 +24,9 @@ export default {
     } finally {
     }
   },
+
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    log.info('🚀 CRON TRIGGER FIRED! The handleScheduled function is running.');
+    await handleScheduled(env);
+  }
 };
