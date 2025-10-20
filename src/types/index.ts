@@ -4,9 +4,11 @@ export interface Env {
 
     STATE_KV: KVNamespace;
     RATE_LIMIT_KV: KVNamespace;
+    PREPARATION_KV: KVNamespace;
 
     BOT_TOKEN: string;
     OPENROUTER_API_KEY: string;
+    OBJECT_STORAGE: KVNamespace;
 }
 
 export interface TelegramUser {

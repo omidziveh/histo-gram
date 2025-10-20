@@ -2,8 +2,10 @@ import type { TelegramUpdate, Env } from '../types';
 import { handleListUsers, handleSkipObject, handleStart, handleStop, handleTestBroadcast, handleUpdateUsernames } from '../bot/commands';
 import { isRateLimited } from '../utils/rateLimiter';
 import { Logger } from "../utils/logger";
-import { sendMessage } from '../services/telegramApi';
+import { copyMessage, sendMessage } from '../services/telegramApi';
 import { escapeMarkdown } from '../utils/caption';
+import { getPreparationMessageId, handleApprovePreparation, handleRetryPreparation, handleSkipPreparation } from '../utils/preparation';
+import { handlePrepareScheduled, handleScheduled } from './scheduled';
 
 const log = new Logger('WebhookHandler');
 
@@ -29,8 +31,12 @@ export async function handleWebhook(request: Request, env: Env, ctx: ExecutionCo
                 await handleStart(message, env);
                 break;
             }
-            case 'stop': {
+            case '/stop': {
                 await handleStop(message, env);
+                break;
+            }
+            case '/test': {
+                await handleScheduled(env);
                 break;
             }
             case '/listusers': {
@@ -47,6 +53,22 @@ export async function handleWebhook(request: Request, env: Env, ctx: ExecutionCo
             }
             case '/skip': {
                 await handleSkipObject(message, env);
+                break;
+            }
+            case '/skipprepare': {
+                await handleSkipPreparation(env);
+                break;
+            }
+            case '/retryprepare': {
+                await handleRetryPreparation(env);
+                break;
+            }
+            case '/approveprepare': {
+                await handleApprovePreparation(env);
+                break;
+            }
+            case '/prepare': {
+                await handlePrepareScheduled(env, false);
                 break;
             }
             default:{

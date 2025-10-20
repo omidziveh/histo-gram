@@ -1,5 +1,5 @@
 import { handleWebhook } from './handlers/webhook';
-import { handleScheduled } from './handlers/scheduled';
+import { handlePrepareScheduled, handleScheduled } from './handlers/scheduled';
 import { Logger } from './utils/logger';
 import type { Env } from './types';
 
@@ -27,6 +27,11 @@ export default {
 
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
     log.info('🚀 CRON TRIGGER FIRED! The handleScheduled function is running.');
-    await handleScheduled(env);
+    log.info(event.cron);
+    if (event.cron === '0 5 * * *') {
+      await handleScheduled(env);
+    } else if (event.cron === '0 15 * * *') {
+      await handlePrepareScheduled(env);
+    }
   }
 };

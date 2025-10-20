@@ -1,5 +1,5 @@
 # Histo-Gram: Daily Art Bot 🎨
-## Version: 2.0.1
+## Version: 2.1.0
 
 A robust, serverless Telegram bot that delivers a daily piece of art and history from The Metropolitan Museum of Art's collection. Built with TypeScript and Cloudflare Workers, it's designed for high reliability and zero maintenance.
 

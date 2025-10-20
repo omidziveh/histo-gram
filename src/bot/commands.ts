@@ -99,7 +99,7 @@ export async function handleTestBroadcast(message:TelegramMessage, env:Env, ctx:
             }
             log.info('object found');
 
-            const success = await processAndSendToUser(chatId, objectId, true, env);
+            const success = await processAndSendToUser(chatId, env, true, objectId);
             if (success) {
                 log.info(`Test broadcast successfully sent to chatId ${chatId} (@${message.from?.username})`);
                 await sendMessage(chatId, escapeMarkdown("Test broadcast sent successfully."), env);

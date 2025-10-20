@@ -1,13 +1,14 @@
 import type { Env, User, ObjectData } from "../types";
-import { getAllSubscribedUsers } from "../db/queries";
+import { getAllSubscribedUsers, skipNextObject } from "../db/queries";
 import { fetchObjectData } from "../services/objectApi";
 import { isError, Logger } from "../utils/logger";
 import { generateComment, translateTtitle } from "../services/aiApi";
 import { retry } from "../utils/retry";
-import { sendMediaGroupToUser } from "../services/telegramApi";
+import { copyMessage, editMediaMessage, sendMediaGroupToUser } from "../services/telegramApi";
 import { escapeMarkdown, generateDatePart } from "../utils/caption";
 import { clearMemory, getMemory, setMemory } from "../utils/memory";
-
+import { getPreparationMessageId, PREPARATION_MESSAGE_KEY, setPreparationMessageId } from "../utils/preparation";
+import { isUserBlocked } from "../utils/errorHandler";
 const log = new Logger('ScheduledHandler')
 
 
@@ -65,14 +66,10 @@ export async function getNewObjectId(env: Env, isBeta: boolean = false): Promise
     }
 }
 
-export async function processAndSendToUser(
-    chatId:number, 
-    objectId:string, 
-    initiate: boolean = false,
-    env:Env
-): Promise<boolean> {
+export async function processAndSendToUser(chatId:number, env:Env, initiate: boolean = false, objectId?:string, messageId?: number): Promise<boolean | number> {
     try {
-        if (initiate) {
+        if (initiate && objectId) {
+            log.info(`Initiating process for object ID: ${objectId}`, initiate);
             await setMemory(objectId, env);
         }
         const memory = await getMemory();
@@ -86,101 +83,151 @@ export async function processAndSendToUser(
             return false;
         }
 
-        while (photoUrls.length > 0) {
+        if (!messageId) { // send mode
+            while (photoUrls.length > 0) {
+                try {
+                    log.info(`Attempting to send ${photoUrls.length} photos to user ${chatId}`);
+                    const messageId = await sendMediaGroupToUser(chatId, photoUrls, caption, env);
+                    log.info(`[SUCCESS] Sent to ${chatId}: ${title}`);
+                    if (messageId) return messageId;
+                } catch (error) {
+                    if (!isError(error)) {
+                        log.error('Unknown error type encountered:', error);
+                        throw error;
+                    }
+
+                    const errorMessage = error.message;
+                    const match = errorMessage.match(/failed to send message #(\d+)/);
+
+                    if (match && match[1]) {
+                        const failedIndex = parseInt(match[1], 10) - 1;
+                        const removedUrl = photoUrls[failedIndex];
+                        photoUrls.splice(failedIndex, 1);
+                        log.warn(`Image #${failedIndex + 1} (${removedUrl}) failed to send. Removing it and retrying with ${photoUrls.length} images.`);
+                    } else {
+                        log.error('Error does not indicate a specific failed image:', errorMessage);
+                        throw error;
+                    }
+                }
+            }
+            log.error(`[FAILURE] All images failed to send to user ${chatId}.`);
+            return false;
+        } else { // edit mode
             try {
-                log.info(`Attempting to send ${photoUrls.length} photos to user ${chatId}`);
-                await sendMediaGroupToUser(chatId, photoUrls, caption, env);
-                log.info(`[SUCCESS] Sent to ${chatId}: ${title}`);
+                log.info(`Attempting to edit message ID ${messageId} for user ${chatId} with ${photoUrls.length} photos.`);
+                await editMediaMessage(chatId, messageId, photoUrls, caption, env);
+                log.info(`[SUCCESS] Edited message ID ${messageId} for user ${chatId}: ${title}`);
                 return true;
             } catch (error) {
-                if (!isError(error)) {
-                    log.error('Unknown error type encountered:', error);
-                    throw error;
-                }
-
-                const errorMessage = error.message;
-                const match = errorMessage.match(/failed to send message #(\d+)/);
-
-                if (match && match[1]) {
-                    const failedIndex = parseInt(match[1], 10) - 1;
-                    const removedUrl = photoUrls[failedIndex];
-                    photoUrls.splice(failedIndex, 1);
-                    log.warn(`Image #${failedIndex + 1} (${removedUrl}) failed to send. Removing it and retrying with ${photoUrls.length} images.`);
-                } else {
-                    log.error('Error does not indicate a specific failed image:', errorMessage);
-                    throw error;
-                }
+                log.error(`Failed to edit message ID ${messageId} for user ${chatId}.`, error);
+                return false;
             }
         }
 
-        log.error(`[FAILURE] All images failed to send to user ${chatId}.`);
-        return false;
 
     } catch (error) {
         const errorMessage = isError(error) ? error.message : String(error);
         log.error(`[FAILURE] Could not send to user ${chatId}. Reason:`, errorMessage);
         return false;
     }
+    
 }
 
 export async function handleScheduled(env:Env): Promise<void> {
     log.info('Broadcasting...');
+    let messageId: number | null = null;
     try {
-        const users = await getAllSubscribedUsers(env);
-        if (users.length === 0) {
-            log.info('No subscribed users to send to.');
-            return;
-        }
-
-        log.info(`Found ${users.length} subscribed users.`);
-        const objectId = await getNewObjectId(env);
-        if (!objectId) {
-            log.warn('No new object ID available to send.');
-            return;
-        }
-        
-        log.info(`Using object ID ${objectId} for broadcast.`);
-        const failedUsers: number[] = [];
-        for (let i = 0; i < users.length; i++) {
-            const user = users[i];
-            const success = await processAndSendToUser(
-                user.chat_id, 
-                objectId, 
-                i === 0,
-                env
-            );
-            if (!success) {
-                failedUsers.push(user.chat_id);
+        messageId = await getPreparationMessageId(env);
+    } catch (error) {
+        log.error('Failed to retrieve preparation message ID:', error);
+        return;
+    }
+    if (messageId) {
+        try {
+            const users = await getAllSubscribedUsers(env);
+            if (users.length === 0) {
+                log.info('No subscribed users to send to.');
+                return;
             }
-            // To avoid hitting rate limits, wait for 1 second between sends
-            if (i < users.length - 1) {
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-        }
 
-        if (failedUsers.length > 0) {
-            log.error(`Failed to send to ${failedUsers.length} users.`);
-            const retriedUsers: number[] = [];
-            for (let i = 0; i < failedUsers.length; i++) {
-                const chatId = failedUsers[i];
-                const success = await processAndSendToUser(
-                    chatId, 
-                    objectId,
-                    false,
-                    env,
-                );
-                if (!success) {
-                    retriedUsers.push(chatId);
+            log.info(`Found ${users.length} subscribed users.`);
+            
+            const failedUsers: number[] = [];
+            for (let i = 0; i < users.length; i++) {
+                const user = users[i];
+                const status = await copyMessage(user.chat_id, env.ADMIN_CHAT_ID, messageId, env);
+                if (status === 403) {
+                    log.warn(`Skipping user ${user.chat_id} as they have blocked the bot.`);
+                    continue;
+                }
+                if (status !== 200) {
+                    log.error(`Failed to send to user ${user.chat_id}. Status: ${status}`);
+                    failedUsers.push(user.chat_id);
+                } else {
+                    log.info(`Successfully sent to user ${user.chat_id}.`);
+                }
+                // To avoid hitting rate limits, wait for 1 second between sends
+                if (i < users.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                 }
             }
-            log.warn(`Retries finished. Failed users: ${retriedUsers.length}`)
-        } else {
-            log.info('Successfully sent to all users.');
+
+            if (failedUsers.length > 0) {
+                log.error(`Failed to send to ${failedUsers.length} users.`);
+                const retriedUsers: number[] = [];
+                for (let i = 0; i < failedUsers.length; i++) {
+                    const chatId = failedUsers[i];
+                    const status = await copyMessage(chatId, env.ADMIN_CHAT_ID, messageId, env);
+                    if (status === 403) {
+                        log.warn(`User ${chatId} has blocked the bot. Skipping further retries.`);
+                        continue;
+                    }
+                }
+                log.warn(`Retries finished. Failed users: ${retriedUsers.length}`)
+            } else {
+                log.info('Successfully sent to all users.');
+            }
+            clearMemory();
+            log.info('Broadcast process completed.');
+            
+        } catch (error) {
+            log.error('A critical error occurred during the daily broadcast process:', error);
         }
-        clearMemory();
-        log.info('Broadcast process completed.');
+    }
+}
+
+export async function handlePrepareScheduled(env:Env, scheduled:boolean=true): Promise<void> {
+    log.info('Preparation job started...');
+    if (scheduled) {
+        try {
+            await skipNextObject(env);
+        } catch {
+            log.error("Error while skipping...");
+        }
+    }
+    try {
+        const objectId = await getNewObjectId(env, true);
+        if (!objectId) {
+            log.warn('No new object ID available for preparation.');
+            return;
+        }
         
+        log.info(`Using object ID ${objectId} for preparation.`);
+        const success = await processAndSendToUser(
+            env.ADMIN_CHAT_ID,
+            env,
+            true,
+            objectId
+        );
+        log.error(`[BZZZZZ] ${success}`)
+        if (!success) {
+            log.error('Failed to send preparation message to admin.');
+            return;
+        } 
+        log.info('Preparation message sent to admin successfully.');
+        await setPreparationMessageId(env, success as number);
+        log.info('Preparation message ID stored successfully.');
     } catch (error) {
-        log.error('A critical error occurred during the daily broadcast process:', error);
+        log.error('A critical error occurred during the preparation process:', error);
     }
 }

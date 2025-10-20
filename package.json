@@ -17,6 +17,8 @@
 		"wrangler": "^4.42.0"
 	},
 	"dependencies": {
+		"@libsql/client": "^0.15.15",
+		"grammy": "^1.38.3",
 		"telegraf": "^4.16.3"
 	}
 }

@@ -15,6 +15,7 @@
 	},
 	"triggers": {
 		"crons": [
+			"0 15 * * *",
 			"0 5 * * *"
 		]
 	},
@@ -23,6 +24,11 @@
 			"binding": "RATE_LIMIT_KV",
 			"id": "78620ccbb6d7448b9676ad65dfc36eef",
 			"preview_id": "deae4267df9c4dde9cb67ad9392a00e0"
+		},
+		{
+			"binding": "PREPARATION_KV",
+			"id": "25cff2f8b735492bab8bdb66cdffaad1",
+			"preview_id": "f724827b67224e8c88f1460f0f2c1bf9"
 		}
 	],
 	"d1_databases": [

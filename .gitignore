@@ -169,3 +169,5 @@ dist
 
 .DS_Store
 Thumbs.db
+
+.src/scripts/
