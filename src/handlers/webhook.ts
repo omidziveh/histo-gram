@@ -1,5 +1,5 @@
 import type { TelegramUpdate, Env } from '../types';
-import { handleListUsers, handleSkipObject, handleStart, handleStop, handleTestBroadcast, handleUpdateUsernames } from '../bot/commands';
+import { handleBeta, handleListUsers, handleSkipObject, handleStart, handleStop, handleTestBroadcast, handleUpdateUsernames } from '../bot/commands';
 import { isRateLimited } from '../utils/rateLimiter';
 import { Logger } from "../utils/logger";
 import { copyMessage, sendMessage } from '../services/telegramApi';
@@ -70,6 +70,9 @@ export async function handleWebhook(request: Request, env: Env, ctx: ExecutionCo
             case '/prepare': {
                 await handlePrepareScheduled(env, false);
                 break;
+            }
+            case '/beta': {
+                await handleBeta(message, env);
             }
             default:{
                 break;

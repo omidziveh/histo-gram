@@ -1,5 +1,5 @@
 import type { Env, TelegramMessage } from '../types';
-import { sendMessage } from '../services/telegramApi';
+import { copyMessages, sendMessage } from '../services/telegramApi';
 import { findUserById, addUser, removeUser, getAllSubscribedUsers, skipNextObject } from '../db/queries';
 import { Logger } from '../utils/logger';
 import { escapeMarkdown } from '../utils/caption';
@@ -205,4 +205,22 @@ export async function handleSkipObject(message: TelegramMessage, env: Env) {
         log.error('Error during skip object process:', error);
         await sendMessage(chatId, escapeMarkdown('❌ An error occurred while processing your request.'), env);
     }
+}
+
+
+export async function handleBeta(message:TelegramMessage, env:Env): Promise<void> {
+    const chatId = message.chat.id;
+    const adminId = parseInt(env.ADMIN_CHAT_ID.toString(), 10);
+    
+    // SECURITY CHECK
+    if (chatId !== adminId) {
+        log.warn(`Unauthorized access attempt to run beta by chatId ${chatId} (@${message.from?.username})`);
+        return;
+    }
+    try {
+        await copyMessages(env.ADMIN_CHAT_ID, env.ADMIN_CHAT_ID, [1320, 1321, 1322], env)
+    } catch {
+        log.error(`Failed to send messages (copyMessages)`);
+    }
+
 }

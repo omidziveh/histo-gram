@@ -156,6 +156,37 @@ export async function copyMessage(toChatId: number, fromChatId: number, messageI
     return response.status;
 }
 
+export async function copyMessages(toChatId: number, fromChatId: number, messageIds: number[], env: Env): Promise<number> {
+    const telegramUrl = `https://api.telegram.org/bot${env.BOT_TOKEN}/copyMessages`;
+    const body = {
+        chat_id: toChatId,
+        from_chat_id: fromChatId,
+        message_ids: messageIds,
+    };
+
+
+    const response = await fetch(telegramUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+
+    if (response.status === 403) {
+        // User has blocked the bot
+        log.warn(`User ${toChatId} has blocked the bot.`);
+        return 403;
+    }
+
+    if (!response.ok) {
+        const errorData = await response.json() as { description: string; };
+        throw new Error(`Failed to copy messages: ${response.status} - ${errorData.description}`);
+    }
+
+    await response.text();
+    return response.status;
+}
+
+
 /**
  * Edits a media message in a specific Telegram chat.
  * @param chatId - The user's chat ID.
