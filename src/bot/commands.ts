@@ -6,6 +6,7 @@ import { escapeMarkdown } from '../utils/caption';
 import { getNewObjectId, processAndSendToUser } from "../handlers/scheduled";
 import { isBetaTester } from '../utils/beta';
 import { clearMemory } from '../utils/memory';
+import { getPreparationMessageIds } from '../utils/preparation';
 
 const log = new Logger('BotCommands');
 
@@ -218,9 +219,14 @@ export async function handleBeta(message:TelegramMessage, env:Env): Promise<void
         return;
     }
     try {
-        await copyMessages(env.ADMIN_CHAT_ID, env.ADMIN_CHAT_ID, [1320, 1321, 1322], env)
+        const messageIds = await getPreparationMessageIds(env);
+        if (messageIds) {
+            for (var id of messageIds) {
+                log.info(`id: ${id}`);
+            }
+        }
     } catch {
-        log.error(`Failed to send messages (copyMessages)`);
+        log.error(`error while fetching.`);
     }
 
 }

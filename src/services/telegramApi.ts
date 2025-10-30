@@ -9,6 +9,35 @@ const log = new Logger('TelegramApi');
 // can import this map to dispatch callback_query events to the registered handlers.
 export const inlineKeyboardHandlers: Map<string, (...args: any[]) => Promise<void> | void> = new Map();
 
+function extractMessageIds(rawResponse: string): number[] {
+  try {
+
+
+    
+    
+    const jsonMatch = rawResponse.match(/\{.*\}/);
+    if (!jsonMatch) {
+      throw new Error("No JSON found in the message");
+    }
+
+    const telegramResponse = JSON.parse(jsonMatch[0]);
+
+    if (!telegramResponse.result || !Array.isArray(telegramResponse.result)) {
+      throw new Error("Invalid response format");
+    }
+
+    
+    
+    const messageIds: number[] = telegramResponse.result.map((item: any) => item.message_id);
+    
+    return messageIds;
+  } catch (error) {
+    console.error("Error extracting message IDs:", error);
+    return [];
+  }
+}
+
+
 /**
  * Sends a media group of image URLs to a specific Telegram chat.
  * @param chatId - The user's chat ID.
@@ -21,7 +50,7 @@ export async function sendMediaGroupToUser(
   photoUrls: string[],
   caption: string,
   env: Env
-): Promise<number | void> {
+): Promise<number[] | void> {
   const telegramUrl = `https://api.telegram.org/bot${env.BOT_TOKEN}/sendMediaGroup`;
   
   const media = photoUrls.map((url, index) => ({
@@ -59,13 +88,12 @@ export async function sendMediaGroupToUser(
     const rawResponseText = await response.text();
     log.info(`Raw response text: ${rawResponseText}`);
 
-    const data = JSON.parse(rawResponseText) as { result: Array<{ message_id: number }> };
-    const messageId = data.result[0].message_id;
+    const messageIds = extractMessageIds(rawResponseText);
 
-    log.info(`Media group sent successfully to chat_id: ${chatId} with message_id: ${messageId}`);
+
 
     log.info(`[SUCCESS] media group sent to ${chatId}`);
-    return messageId;
+    return messageIds;
 
   } catch (error) {
     clearTimeout(timeoutId);
@@ -120,42 +148,12 @@ export async function sendMessage(chatId: number, text: string, env: Env): Promi
 }
 
 /**
- * Copies a message from one chat to another. This hides the "forwarded from" header.
+ * Copies multiple messages from one chat to another. This hides the "forwarded from" header.
  * @param toChatId - The target chat ID where the message will be sent.
  * @param fromChatId - The source chat ID where the message was sent.
- * @param messageId - The message ID to copy.
+ * @param messageIds - The message ID list to copy.
  * @param env - The environment object.
  */
-export async function copyMessage(toChatId: number, fromChatId: number, messageId: number, env: Env): Promise<number> {
-    const telegramUrl = `https://api.telegram.org/bot${env.BOT_TOKEN}/copyMessage`;
-    const body = {
-        chat_id: toChatId,
-        from_chat_id: fromChatId,
-        message_id: messageId,
-    };
-
-
-    const response = await fetch(telegramUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-    });
-
-    if (response.status === 403) {
-        // User has blocked the bot
-        log.warn(`User ${toChatId} has blocked the bot.`);
-        return 403;
-    }
-
-    if (!response.ok) {
-        const errorData = await response.json() as { description: string; };
-        throw new Error(`Failed to copy message: ${response.status} - ${errorData.description}`);
-    }
-
-    await response.text();
-    return response.status;
-}
-
 export async function copyMessages(toChatId: number, fromChatId: number, messageIds: number[], env: Env): Promise<number> {
     const telegramUrl = `https://api.telegram.org/bot${env.BOT_TOKEN}/copyMessages`;
     const body = {

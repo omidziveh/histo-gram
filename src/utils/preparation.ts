@@ -11,14 +11,14 @@ export const PREPARATION_MESSAGE_KEY = 'MESSAGE-ID';
 
 export async function handleRetryPreparation( env: Env ):Promise<boolean> {
     log.info('Retrying ...');
-    let messageId:number;
+    let messageIds:number[];
     try {
-        const msgId = await getPreparationMessageId(env);
+        const msgId = await getPreparationMessageIds(env);
         if (!msgId) {
             log.error('Could not find message ID in KV.');
             return false;
         }
-        messageId = msgId;
+        messageIds = msgId;
     } catch(error) {
         log.error(`Failed to get message_id at retryPreparation function: ${error}`);
         return false;
@@ -30,7 +30,7 @@ export async function handleRetryPreparation( env: Env ):Promise<boolean> {
             env,
             false,
             undefined,
-            messageId
+            messageIds
         )
     } catch (error) {
         log.error(`Failed to process and send user message: ${error}`);
@@ -71,28 +71,29 @@ export async function handleApprovePreparation( env:Env ):Promise<void> {
     }
 }
 
-export async function setPreparationMessageId( env: Env, messageId: number ): Promise<boolean> {
+export async function setPreparationMessageIds(env: Env, messageIds: number[]): Promise<boolean> {
     try {
-        await env.PREPARATION_KV.put(PREPARATION_MESSAGE_KEY, String(messageId));
-        log.info(`Preparation message ID set to KV: ${messageId}`);
+        await env.PREPARATION_KV.put(PREPARATION_MESSAGE_KEY, JSON.stringify(messageIds));
+        log.info(`Preparation message IDs set to KV: [${messageIds.join(', ')}]`);
         return true;
     } catch (error) {
-        log.error('Error setting preparation message ID in KV:', error);
+        log.error('Error setting preparation message IDs in KV:', error);
         return false;
     }
 }
 
-export async function getPreparationMessageId( env: Env ): Promise<number | null> {
+export async function getPreparationMessageIds(env: Env): Promise<number[] | null> {
     try {
-        const messageId = await env.PREPARATION_KV.get(PREPARATION_MESSAGE_KEY);
-        if (!messageId) {
-            log.warn('No preparation message ID found in KV.');
+        const messageIdsStr = await env.PREPARATION_KV.get(PREPARATION_MESSAGE_KEY);
+        if (!messageIdsStr) {
+            log.warn('No preparation message IDs found in KV.');
             return null;
         }
-        log.info(`Retrieved preparation message ID from KV: ${messageId}`);
-        return parseInt(messageId);
+        const messageIds = JSON.parse(messageIdsStr) as number[];
+        log.info(`Retrieved preparation message IDs from KV: [${messageIds.join(', ')}]`);
+        return messageIds;
     } catch (error) {
-        log.error('Error retrieving preparation message ID from KV:', error);
+        log.error('Error retrieving preparation message IDs from KV:', error);
         return null;
     }
 }

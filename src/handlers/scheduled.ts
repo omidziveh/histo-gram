@@ -4,10 +4,10 @@ import { fetchObjectData } from "../services/objectApi";
 import { isError, Logger } from "../utils/logger";
 import { generateComment, translateTtitle } from "../services/aiApi";
 import { retry } from "../utils/retry";
-import { copyMessage, editMediaMessage, sendMediaGroupToUser } from "../services/telegramApi";
+import { copyMessages, editMediaMessage, sendMediaGroupToUser } from "../services/telegramApi";
 import { escapeMarkdown, generateDatePart } from "../utils/caption";
 import { clearMemory, getMemory, setMemory } from "../utils/memory";
-import { getPreparationMessageId, PREPARATION_MESSAGE_KEY, setPreparationMessageId } from "../utils/preparation";
+import { getPreparationMessageIds, PREPARATION_MESSAGE_KEY, setPreparationMessageIds } from "../utils/preparation";
 import { isUserBlocked } from "../utils/errorHandler";
 const log = new Logger('ScheduledHandler')
 
@@ -66,7 +66,7 @@ export async function getNewObjectId(env: Env, isBeta: boolean = false): Promise
     }
 }
 
-export async function processAndSendToUser(chatId:number, env:Env, initiate: boolean = false, objectId?:string, messageId?: number): Promise<boolean | number> {
+export async function processAndSendToUser(chatId:number, env:Env, initiate: boolean = false, objectId?:string, messageId?: number[]): Promise<boolean | number[]> {
     try {
         if (initiate && objectId) {
             log.info(`Initiating process for object ID: ${objectId}`, initiate);
@@ -87,9 +87,10 @@ export async function processAndSendToUser(chatId:number, env:Env, initiate: boo
             while (photoUrls.length > 0) {
                 try {
                     log.info(`Attempting to send ${photoUrls.length} photos to user ${chatId}`);
-                    const messageId = await sendMediaGroupToUser(chatId, photoUrls, caption, env);
+                    var messageIds = await sendMediaGroupToUser(chatId, photoUrls, caption, env);
                     log.info(`[SUCCESS] Sent to ${chatId}: ${title}`);
-                    if (messageId) return messageId;
+                    log.info(`${messageIds}`);
+                    if (messageIds) return messageIds;
                 } catch (error) {
                     if (!isError(error)) {
                         log.error('Unknown error type encountered:', error);
@@ -112,17 +113,20 @@ export async function processAndSendToUser(chatId:number, env:Env, initiate: boo
             }
             log.error(`[FAILURE] All images failed to send to user ${chatId}.`);
             return false;
-        } else { // edit mode
-            try {
-                log.info(`Attempting to edit message ID ${messageId} for user ${chatId} with ${photoUrls.length} photos.`);
-                await editMediaMessage(chatId, messageId, photoUrls, caption, env);
-                log.info(`[SUCCESS] Edited message ID ${messageId} for user ${chatId}: ${title}`);
-                return true;
-            } catch (error) {
-                log.error(`Failed to edit message ID ${messageId} for user ${chatId}.`, error);
-                return false;
-            }
+        } else {
+            return false;
         }
+        // else { // edit mode
+        //     try {
+        //         log.info(`Attempting to edit message ID ${messageId} for user ${chatId} with ${photoUrls.length} photos.`);
+        //         await editMediaMessage(chatId, messageId, photoUrls, caption, env);
+        //         log.info(`[SUCCESS] Edited message ID ${messageId} for user ${chatId}: ${title}`);
+        //         return true;
+        //     } catch (error) {
+        //         log.error(`Failed to edit message ID ${messageId} for user ${chatId}.`, error);
+        //         return false;
+        //     }
+        // }
 
 
     } catch (error) {
@@ -135,14 +139,14 @@ export async function processAndSendToUser(chatId:number, env:Env, initiate: boo
 
 export async function handleScheduled(env:Env): Promise<void> {
     log.info('Broadcasting...');
-    let messageId: number | null = null;
+    let messageIds: number[] | null = null;
     try {
-        messageId = await getPreparationMessageId(env);
+        messageIds = await getPreparationMessageIds(env);
     } catch (error) {
         log.error('Failed to retrieve preparation message ID:', error);
         return;
     }
-    if (messageId) {
+    if (messageIds) {
         try {
             const users = await getAllSubscribedUsers(env);
             if (users.length === 0) {
@@ -155,7 +159,7 @@ export async function handleScheduled(env:Env): Promise<void> {
             const failedUsers: number[] = [];
             for (let i = 0; i < users.length; i++) {
                 const user = users[i];
-                const status = await copyMessage(user.chat_id, env.ADMIN_CHAT_ID, messageId, env);
+                const status = await copyMessages(user.chat_id, env.ADMIN_CHAT_ID, messageIds, env);
                 if (status === 403) {
                     log.warn(`Skipping user ${user.chat_id} as they have blocked the bot.`);
                     continue;
@@ -177,7 +181,7 @@ export async function handleScheduled(env:Env): Promise<void> {
                 const retriedUsers: number[] = [];
                 for (let i = 0; i < failedUsers.length; i++) {
                     const chatId = failedUsers[i];
-                    const status = await copyMessage(chatId, env.ADMIN_CHAT_ID, messageId, env);
+                    const status = await copyMessages(chatId, env.ADMIN_CHAT_ID, messageIds, env);
                     if (status === 403) {
                         log.warn(`User ${chatId} has blocked the bot. Skipping further retries.`);
                         continue;
@@ -225,7 +229,7 @@ export async function handlePrepareScheduled(env:Env, scheduled:boolean=true): P
             return;
         } 
         log.info('Preparation message sent to admin successfully.');
-        await setPreparationMessageId(env, success as number);
+        await setPreparationMessageIds(env, success as number[]);
         log.info('Preparation message ID stored successfully.');
     } catch (error) {
         log.error('A critical error occurred during the preparation process:', error);

@@ -2,9 +2,9 @@ import type { TelegramUpdate, Env } from '../types';
 import { handleBeta, handleListUsers, handleSkipObject, handleStart, handleStop, handleTestBroadcast, handleUpdateUsernames } from '../bot/commands';
 import { isRateLimited } from '../utils/rateLimiter';
 import { Logger } from "../utils/logger";
-import { copyMessage, sendMessage } from '../services/telegramApi';
+import { copyMessages, sendMessage } from '../services/telegramApi';
 import { escapeMarkdown } from '../utils/caption';
-import { getPreparationMessageId, handleApprovePreparation, handleRetryPreparation, handleSkipPreparation } from '../utils/preparation';
+import { getPreparationMessageIds, handleApprovePreparation, handleRetryPreparation, handleSkipPreparation } from '../utils/preparation';
 import { handlePrepareScheduled, handleScheduled } from './scheduled';
 
 const log = new Logger('WebhookHandler');
