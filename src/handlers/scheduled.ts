@@ -163,6 +163,8 @@ export async function handleScheduled(env:Env): Promise<void> {
                 if (status === 403) {
                     log.warn(`Skipping user ${user.chat_id} as they have blocked the bot.`);
                     continue;
+                } else {
+                    log.info(`Status code is ${status}`);
                 }
                 if (status !== 200) {
                     log.error(`Failed to send to user ${user.chat_id}. Status: ${status}`);
