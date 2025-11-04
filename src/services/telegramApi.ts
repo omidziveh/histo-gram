@@ -169,7 +169,7 @@ export async function copyMessages(toChatId: number, fromChatId: number, message
         body: JSON.stringify(body),
     });
 
-    if (response.status === 403) {
+    if (response.status === 400) {
         // User has blocked the bot
         log.warn(`User ${toChatId} has blocked the bot.`);
         return 403;
